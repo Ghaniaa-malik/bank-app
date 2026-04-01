@@ -2,89 +2,53 @@
 import streamlit as st
 import pandas as pd
 import joblib
-from pathlib import Path
+import numpy as np
 
-# ----------------------------
-# Set Page Config
-# ----------------------------
-st.set_page_config(
-    page_title="💳 AI-Powered Bank Marketing Intelligence",
-    page_icon="💳",
-    layout="wide"
-)
+st.set_page_config(page_title="💳 AI Bank Marketing Intelligence", layout="wide")
 
-# ----------------------------
-# Title & Description
-# ----------------------------
 st.title("💳 AI-Powered Bank Marketing Intelligence System")
-st.markdown("""
-Predict customer subscription using **Machine Learning**.  
-Developed by **Ghania Iftikhar | Machine Learning IDS Project**.
-""")
+st.subheader("Predict Customer Subscription using Machine Learning")
 
-# ----------------------------
-# Load Model Safely
-# ----------------------------
-FILE_DIR = Path(__file__).parent
-model_path = FILE_DIR / "model.pkl"
+# Load data
+@st.cache_data
+def load_data():
+    return pd.read_csv("bank.csv")
 
-try:
-    model = joblib.load(model_path)
-except FileNotFoundError:
-    st.error("❌ model.pkl not found! Make sure the file is in the project folder.")
-    st.stop()
+df = load_data()
 
-# ----------------------------
-# Dataset Upload (Optional)
-# ----------------------------
-st.sidebar.header("Upload Dataset (Optional)")
-uploaded_file = st.sidebar.file_uploader("Choose CSV file", type="csv")
-if uploaded_file:
-    df = pd.read_csv(uploaded_file)
-    st.write("### Dataset Preview")
-    st.dataframe(df.head())
-else:
-    st.info("Upload a CSV to view data here.")
+# Show dataset info
+st.markdown("### 📊 Dataset Overview")
+st.write("Total Customers:", df.shape[0])
+st.write("Total Features:", df.shape[1])
 
-# ----------------------------
-# Customer Input for Prediction
-# ----------------------------
-st.sidebar.header("Customer Input Parameters")
+# Optional: Show visualizations
+st.markdown("### 📈 Data Visualizations")
+st.bar_chart(df['age'].value_counts().sort_index())
 
-def user_input_features():
-    age = st.sidebar.slider("Age", 18, 95, 30)
-    balance = st.sidebar.number_input("Account Balance", min_value=0, value=1000)
-    duration = st.sidebar.number_input("Last Call Duration (seconds)", min_value=0, value=300)
-    campaign = st.sidebar.number_input("Campaign Contacts", min_value=1, value=1)
-    
-    data = {
-        "age": age,
-        "balance": balance,
-        "duration": duration,
-        "campaign": campaign
-    }
-    features = pd.DataFrame([data])
-    return features
+# Load trained model
+@st.cache_resource
+def load_model():
+    return joblib.load("model.pkl")
 
-input_df = user_input_features()
+model = load_model()
 
-st.write("### Customer Input Data")
-st.dataframe(input_df)
+# Customer Prediction System
+st.markdown("### 🧠 Customer Prediction System")
+age = st.slider("Age", int(df['age'].min()), int(df['age'].max()), 30)
+balance = st.number_input("Account Balance", float(df['balance'].min()), float(df['balance'].max()), 1000.0)
+duration = st.number_input("Last Call Duration (seconds)", float(df['duration'].min()), float(df['duration'].max()), 300.0)
+campaign = st.number_input("Number of Contacts in this Campaign", int(df['campaign'].min()), int(df['campaign'].max()), 1)
 
-# ----------------------------
-# Prediction
-# ----------------------------
-prediction = model.predict(input_df)
-prediction_proba = model.predict_proba(input_df)
+# Predict button
+if st.button("Predict Subscription"):
+    input_data = np.array([[age, balance, duration, campaign]])
+    prediction = model.predict(input_data)[0]
+    probability = model.predict_proba(input_data)[0][1]
 
-st.write("### Prediction")
-st.write("✅ Customer will subscribe" if prediction[0]==1 else "❌ Customer will NOT subscribe")
+    if prediction == 1:
+        st.success(f"✅ Customer is likely to subscribe! (Probability: {probability:.2f})")
+    else:
+        st.warning(f"❌ Customer is unlikely to subscribe. (Probability: {probability:.2f})")
 
-st.write("### Prediction Probability")
-st.write(f"Subscribe: {prediction_proba[0][1]*100:.2f}% | Not Subscribe: {prediction_proba[0][0]*100:.2f}%")
-
-# ----------------------------
-# Footer
-# ----------------------------
 st.markdown("---")
-st.markdown("Developed by **Ghania Iftikhar | Machine Learning IDS Project**")
+st.markdown("Developed by **Ghania Iftikhar** | Machine Learning IDS Project")
