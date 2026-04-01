@@ -5,19 +5,19 @@ from sklearn.ensemble import RandomForestClassifier
 import joblib
 
 # Load dataset
-df = pd.read_csv("bank.csv")
+df = pd.read_csv("bank.csv")  # ensure bank.csv is in same folder
 
-# Sample features
-X = df[['age','balance','duration','campaign']]
-y = df['y']  # assuming 1=subscribed, 0=not
+# Select features & target
+X = df[['age', 'balance', 'duration', 'campaign']]  # adjust as needed
+y = df['y']  # target column: 1=subscribed, 0=not
 
 # Train-test split
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
 # Train model
-model = RandomForestClassifier()
+model = RandomForestClassifier(n_estimators=100, random_state=42)
 model.fit(X_train, y_train)
 
-# Save model
+# Save the model
 joblib.dump(model, "model.pkl")
 print("✅ model.pkl created successfully")
