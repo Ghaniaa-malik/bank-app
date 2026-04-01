@@ -1,60 +1,76 @@
+# app.py
+
 import streamlit as st
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
+import joblib
+import os
 
-st.set_page_config(page_title="💳 AI Bank Marketing Dashboard", layout="wide")
+st.set_page_config(
+    page_title="AI-Powered Bank Marketing Intelligence System",
+    page_icon="💳",
+    layout="wide"
+)
+
 st.title("💳 AI-Powered Bank Marketing Intelligence System")
 st.subheader("Predict Customer Subscription using Machine Learning")
 
-# Load data
-@st.cache_data
-def load_data():
-    df = pd.read_csv("bank.csv")  # Make sure bank.csv is uploaded
-    return df
+# ---------------- Dataset Upload ----------------
+st.sidebar.header("Upload Dataset")
+uploaded_file = st.sidebar.file_uploader("Upload your CSV dataset", type=["csv"])
 
-df = load_data()
+if uploaded_file:
+    df = pd.read_csv(uploaded_file)
+    st.success("Dataset Loaded Successfully!")
+    st.write("### Dataset Overview")
+    st.write(f"Total Customers: {df.shape[0]}")
+    st.write(f"Total Features: {df.shape[1]}")
+    st.dataframe(df.head())
 
-# Dataset Overview
-st.markdown("### 📊 Dataset Overview")
-st.write(f"Total Customers: {df.shape[0]}")
-st.write(f"Total Features: {df.shape[1]}")
+    st.write("### Columns in Dataset")
+    st.write(df.columns)
 
-# Safe Data Visualization
-st.markdown("### 📈 Age Distribution")
-if 'age' in df.columns:
-    st.bar_chart(df['age'].clip(0).value_counts().sort_index())  # clip negative ages if any
+    # Check if target column exists
+    target_column = st.selectbox("Select the target column", df.columns, index=len(df.columns)-1)
+    if target_column:
+        st.success(f"Target column selected: {target_column}")
 
-st.markdown("### 🔹 Customer Prediction System")
+        # ---------------- Train Model ----------------
+        st.write("### Train Machine Learning Model")
+        features = st.multiselect("Select feature columns", [col for col in df.columns if col != target_column])
+        if len(features) > 0:
+            if st.button("Train Model"):
+                X = df[features]
+                y = df[target_column].apply(lambda x: 1 if str(x).lower() in ['yes', '1', 'true'] else 0)
 
-# Sidebar Inputs
-age = st.slider("Age", int(df['age'].min()), int(df['age'].max()), 30)
-balance = st.number_input("Account Balance", float(df['balance'].min()), float(df['balance'].max()), 1000.0)
-duration = st.number_input("Last Call Duration (seconds)", float(df['duration'].min()), float(df['duration'].max()), 300.0)
-campaign = st.number_input("Number of Contacts in this Campaign", int(df['campaign'].min()), int(df['campaign'].max()), 1)
+                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+                model = RandomForestClassifier(n_estimators=100, random_state=42)
+                model.fit(X_train, y_train)
+                st.success("Model Trained Successfully!")
 
-# Train simple model inside app
-@st.cache_resource
-def train_model():
-    X = df[['age','balance','duration','campaign']]
-    y = df['y']  # make sure target column exists
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    model = RandomForestClassifier(n_estimators=100, random_state=42)
-    model.fit(X_train, y_train)
-    return model
+                # Save the model
+                joblib.dump(model, "model.pkl")
+                st.info("Model saved as model.pkl")
 
-model = train_model()
+        # ---------------- Prediction ----------------
+        st.write("### Customer Prediction System")
+        if os.path.exists("model.pkl"):
+            model = joblib.load("model.pkl")
+            st.success("Model Loaded!")
 
-# Prediction
-if st.button("Predict Subscription"):
-    input_data = np.array([[age, balance, duration, campaign]])
-    prediction = model.predict(input_data)[0]
-    probability = model.predict_proba(input_data)[0][1]
-    if prediction == 1:
-        st.success(f"✅ Customer is likely to subscribe! (Probability: {probability:.2f})")
-    else:
-        st.warning(f"❌ Customer is unlikely to subscribe. (Probability: {probability:.2f})")
+            st.write("Enter Customer Details for Prediction")
+            input_data = {}
+            for feature in features:
+                val = st.number_input(f"{feature}", value=float(df[feature].median()))
+                input_data[feature] = val
 
-st.markdown("---")
-st.markdown("Developed by **Ghania Iftikhar** | Machine Learning IDS Project")
+            if st.button("Predict"):
+                input_df = pd.DataFrame([input_data])
+                prediction = model.predict(input_df)[0]
+                probability = model.predict_proba(input_df)[0][1]
+                st.write(f"**Prediction:** {'Subscribed' if prediction==1 else 'Not Subscribed'}")
+                st.write(f"**Probability of Subscription:** {probability:.2f}")
+else:
+    st.info("Please upload a CSV dataset to continue.")
