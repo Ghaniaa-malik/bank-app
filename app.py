@@ -20,7 +20,7 @@ def load_data():
 df = load_data()
 
 # -----------------------
-# ENCODE DATA (FIXED)
+# ENCODE DATA
 # -----------------------
 df_encoded = df.copy()
 
@@ -52,7 +52,7 @@ st.sidebar.title("📊 Navigation")
 
 page = st.sidebar.radio(
     "Go to",
-    ["Dashboard", "Data Analysis", "Prediction", "Model Insights"]
+    ["Dashboard", "Data Analysis", "Prediction", "Model Insights", "Bulk Prediction"]
 )
 
 # -----------------------
@@ -73,7 +73,7 @@ if page == "Dashboard":
     col2.metric("Avg Age", int(df["age"].mean()))
     col3.metric("Model Accuracy", f"{accuracy:.2f}")
 
-    st.subheader("📈 Quick Insights")
+    st.subheader("📈 Insights")
 
     c1, c2 = st.columns(2)
 
@@ -101,7 +101,7 @@ elif page == "Data Analysis":
     fig = px.imshow(corr, text_auto=True)
     st.plotly_chart(fig, use_container_width=True)
 
-    st.subheader("Deposit Distribution")
+    st.subheader("Deposit Ratio")
     fig = px.pie(df, names="deposit", title="Subscription Ratio")
     st.plotly_chart(fig, use_container_width=True)
 
@@ -171,6 +171,54 @@ elif page == "Model Insights":
     )
 
     st.plotly_chart(fig, use_container_width=True)
+
+# =====================================================
+# BULK PREDICTION
+# =====================================================
+elif page == "Bulk Prediction":
+
+    st.header("📂 Bulk Customer Prediction")
+
+    uploaded_file = st.file_uploader("Upload CSV File", type=["csv"])
+
+    if uploaded_file is not None:
+
+        new_data = pd.read_csv(uploaded_file)
+
+        st.subheader("Uploaded Data")
+        st.dataframe(new_data.head())
+
+        required_cols = X.columns.tolist()
+
+        missing_cols = [col for col in required_cols if col not in new_data.columns]
+
+        if len(missing_cols) > 0:
+            st.error(f"Missing columns: {missing_cols}")
+        else:
+            new_data_encoded = new_data.copy()
+
+            for col in new_data_encoded.select_dtypes(include='object').columns:
+                new_data_encoded[col] = new_data_encoded[col].astype('category').cat.codes
+
+            new_data_encoded = new_data_encoded[required_cols]
+
+            predictions = model.predict(new_data_encoded)
+            probs = model.predict_proba(new_data_encoded)[:,1]
+
+            new_data["Prediction"] = np.where(predictions==1, "Yes", "No")
+            new_data["Confidence"] = probs
+
+            st.subheader("Results")
+            st.dataframe(new_data)
+
+            csv = new_data.to_csv(index=False).encode('utf-8')
+
+            st.download_button(
+                "⬇ Download Results",
+                csv,
+                "predictions.csv",
+                "text/csv"
+            )
 
 # -----------------------
 # FOOTER
