@@ -9,49 +9,43 @@ st.set_page_config(page_title="AI Bank Dashboard", layout="wide")
 
 st.title("💳 AI-Powered Bank Marketing Intelligence System")
 
-# ---------------------------
-# STEP 1: FILE UPLOAD FIRST
-# ---------------------------
-uploaded_file = st.file_uploader("📂 Upload Your Dataset (CSV)", type=["csv"])
+# =====================================================
+# 1️⃣ UPLOAD FILE FIRST
+# =====================================================
+uploaded_file = st.file_uploader("📂 Upload CSV File", type=["csv"])
 
 if uploaded_file is None:
-    st.info("Please upload a CSV file to continue")
+    st.info("Please upload a dataset to continue")
     st.stop()
 
-# ---------------------------
-# LOAD USER DATA
-# ---------------------------
 df = pd.read_csv(uploaded_file)
 
-st.success("✅ File Uploaded Successfully")
+st.success("File uploaded successfully ✅")
 
-st.subheader("📊 Your Dataset Preview")
+st.subheader("📊 Dataset Preview")
 st.dataframe(df.head())
 
-# ---------------------------
-# CHECK REQUIRED COLUMN
-# ---------------------------
+# =====================================================
+# CHECK TARGET COLUMN
+# =====================================================
 if "deposit" not in df.columns:
-    st.error("❌ Your dataset must contain 'deposit' column")
+    st.error("❌ Dataset must contain 'deposit' column")
     st.stop()
 
-# ---------------------------
-# ENCODE DATA
-# ---------------------------
+# =====================================================
+# CLEAN + ENCODE
+# =====================================================
 df_encoded = df.copy()
 
 for col in df_encoded.select_dtypes(include='object').columns:
     df_encoded[col] = df_encoded[col].astype('category').cat.codes
 
-# ---------------------------
-# FEATURES & TARGET
-# ---------------------------
 X = df_encoded.drop("deposit", axis=1)
 y = df_encoded["deposit"]
 
-# ---------------------------
+# =====================================================
 # TRAIN MODEL
-# ---------------------------
+# =====================================================
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42
 )
@@ -61,10 +55,10 @@ model.fit(X_train, y_train)
 
 accuracy = model.score(X_test, y_test)
 
-# ---------------------------
+# =====================================================
 # SIDEBAR
-# ---------------------------
-st.sidebar.title("📊 Navigation")
+# =====================================================
+st.sidebar.title("Navigation")
 
 page = st.sidebar.radio(
     "Go to",
@@ -76,25 +70,21 @@ page = st.sidebar.radio(
 # =====================================================
 if page == "Dashboard":
 
-    st.header("📊 Dashboard")
+    st.header("📊 Dashboard Overview")
 
     col1, col2, col3 = st.columns(3)
 
     col1.metric("Rows", len(df))
     col2.metric("Columns", len(df.columns))
-    col3.metric("Model Accuracy", f"{accuracy:.2f}")
-
-    st.subheader("📈 Age Distribution")
+    col3.metric("Accuracy", f"{accuracy:.2f}")
 
     if "age" in df.columns:
-        fig = px.histogram(df, x="age")
-        st.plotly_chart(fig, use_container_width=True)
-
-    st.subheader("💰 Balance Distribution")
+        st.subheader("Age Distribution")
+        st.plotly_chart(px.histogram(df, x="age"), use_container_width=True)
 
     if "balance" in df.columns:
-        fig = px.histogram(df, x="balance")
-        st.plotly_chart(fig, use_container_width=True)
+        st.subheader("Balance Distribution")
+        st.plotly_chart(px.histogram(df, x="balance"), use_container_width=True)
 
 # =====================================================
 # DATA ANALYSIS
@@ -104,13 +94,11 @@ elif page == "Data Analysis":
     st.header("📈 Data Analysis")
 
     st.subheader("Correlation Heatmap")
-    fig = px.imshow(df_encoded.corr(), text_auto=True)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(px.imshow(df_encoded.corr(), text_auto=True), use_container_width=True)
 
     if "deposit" in df.columns:
         st.subheader("Deposit Ratio")
-        fig = px.pie(df, names="deposit")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(px.pie(df, names="deposit"), use_container_width=True)
 
     numeric_cols = df.select_dtypes(include=np.number).columns
 
@@ -119,8 +107,7 @@ elif page == "Data Analysis":
         x_axis = st.selectbox("X-axis", numeric_cols)
         y_axis = st.selectbox("Y-axis", numeric_cols)
 
-        fig = px.scatter(df, x=x_axis, y=y_axis)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(px.scatter(df, x=x_axis, y=y_axis), use_container_width=True)
 
 # =====================================================
 # PREDICTION
@@ -132,15 +119,27 @@ elif page == "Prediction":
     input_data = {}
 
     for col in X.columns:
-        if df[col].dtype == 'object':
-            input_data[col] = st.selectbox(col, df[col].unique())
-        else:
+
+        if pd.api.types.is_numeric_dtype(df[col]):
+
+            col_data = pd.to_numeric(df[col], errors='coerce')
+
+            min_val = float(col_data.min())
+            max_val = float(col_data.max())
+            mean_val = float(col_data.mean())
+
+            if np.isnan(mean_val):
+                mean_val = 0.0
+
             input_data[col] = st.number_input(
                 col,
-                float(df[col].min()),
-                float(df[col].max()),
-                float(df[col].mean())
+                min_value=min_val,
+                max_value=max_val,
+                value=mean_val
             )
+
+        else:
+            input_data[col] = st.selectbox(col, df[col].dropna().unique())
 
     if st.button("🚀 Predict"):
 
@@ -153,9 +152,9 @@ elif page == "Prediction":
         prob = model.predict_proba(input_df)[0][1]
 
         if prediction == 1:
-            st.success("✅ WILL Subscribe")
+            st.success("✅ WILL SUBSCRIBE")
         else:
-            st.error("❌ Will NOT Subscribe")
+            st.error("❌ WILL NOT SUBSCRIBE")
 
         st.progress(int(prob * 100))
         st.write(f"Confidence: {prob*100:.2f}%")
@@ -174,17 +173,16 @@ elif page == "Model Insights":
         "Importance": importance
     }).sort_values("Importance", ascending=False)
 
-    fig = px.bar(
-        importance_df.head(10),
-        x="Importance",
-        y="Feature",
-        orientation="h"
+    st.plotly_chart(
+        px.bar(importance_df.head(10),
+               x="Importance",
+               y="Feature",
+               orientation="h"),
+        use_container_width=True
     )
 
-    st.plotly_chart(fig, use_container_width=True)
-
-# -----------------------
+# =====================================================
 # FOOTER
-# -----------------------
+# =====================================================
 st.markdown("---")
-st.caption("Developed by Ghania Iftikhar | IDS Project")
+st.caption("AI Bank Dashboard | Final Stable Version")
