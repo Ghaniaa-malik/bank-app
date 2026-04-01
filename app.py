@@ -2,128 +2,145 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
 
-# Page config
+# -------------------------
+# Page Config
+# -------------------------
 st.set_page_config(page_title="Bank AI Dashboard", layout="wide")
 
 st.title("💳 AI-Powered Bank Marketing Intelligence System")
-st.markdown("### Advanced Customer Subscription Prediction Dashboard")
+st.markdown("### Predict Customer Subscription using Machine Learning")
 
-# Load data
-df = pd.read_csv("bank.csv")
+# -------------------------
+# Load Data
+# -------------------------
+@st.cache_data
+def load_data():
+    return pd.read_csv("bank.csv")
 
-# Encode categorical
-label_encoders = {}
-for col in df.select_dtypes(include=['object']).columns:
-    le = LabelEncoder()
-    df[col] = le.fit_transform(df[col])
-    label_encoders[col] = le
+df = load_data()
 
-# Features
-X = df.drop("deposit", axis=1)
-y = df["deposit"]
+st.success("✅ Dataset Loaded Successfully")
 
-# Train model
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
-model = RandomForestClassifier()
+# -------------------------
+# Encode Data (IMPORTANT FIX)
+# -------------------------
+df_encoded = df.copy()
+
+for col in df_encoded.select_dtypes(include='object').columns:
+    df_encoded[col] = df_encoded[col].astype('category').cat.codes
+
+# -------------------------
+# Features & Target
+# -------------------------
+X = df_encoded.drop("deposit", axis=1)
+y = df_encoded["deposit"]
+
+# -------------------------
+# Train Model
+# -------------------------
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+
+model = RandomForestClassifier(n_estimators=100, random_state=42)
 model.fit(X_train, y_train)
 
-# Accuracy
-acc = model.score(X_test, y_test)
+accuracy = model.score(X_test, y_test)
 
-# =========================
+# -------------------------
 # DASHBOARD
-# =========================
+# -------------------------
 st.subheader("📊 Dashboard Overview")
 
-c1, c2, c3 = st.columns(3)
-c1.metric("Customers", len(df))
-c2.metric("Avg Age", int(df["age"].mean()))
-c3.metric("Model Accuracy", f"{acc*100:.2f}%")
+col1, col2, col3 = st.columns(3)
 
-# =========================
-# CHARTS
-# =========================
+col1.metric("Total Customers", len(df))
+col2.metric("Average Age", int(df["age"].mean()))
+col3.metric("Model Accuracy", f"{accuracy:.2f}")
+
+# -------------------------
+# Charts
+# -------------------------
 st.subheader("📈 Data Visualizations")
+
+c1, c2 = st.columns(2)
+
+with c1:
+    fig = px.histogram(df, x="age", title="Age Distribution")
+    st.plotly_chart(fig, use_container_width=True)
+
+with c2:
+    fig = px.histogram(df, x="balance", title="Balance Distribution")
+    st.plotly_chart(fig, use_container_width=True)
+
+# Deposit Count
+fig = px.pie(df, names="deposit", title="Deposit Subscription Ratio")
+st.plotly_chart(fig, use_container_width=True)
+
+# -------------------------
+# Prediction Section
+# -------------------------
+st.subheader("🧠 Customer Prediction System")
 
 col1, col2 = st.columns(2)
 
 with col1:
-    fig1 = px.histogram(df, x="age", title="Age Distribution")
-    st.plotly_chart(fig1, use_container_width=True)
+    age = st.slider("Age", 18, 95, 30)
+    balance = st.number_input("Balance", -2000, 100000, 1000)
+    duration = st.number_input("Call Duration", 0, 5000, 300)
+    campaign = st.number_input("Campaign Contacts", 1, 50, 1)
 
 with col2:
-    fig2 = px.histogram(df, x="balance", title="Balance Distribution")
-    st.plotly_chart(fig2, use_container_width=True)
+    if st.button("🚀 Predict"):
 
-col3, col4 = st.columns(2)
+        input_dict = {col: 0 for col in X.columns}
 
-with col3:
-    fig3 = px.box(df, x="deposit", y="balance", title="Balance vs Deposit")
-    st.plotly_chart(fig3, use_container_width=True)
+        input_dict["age"] = age
+        input_dict["balance"] = balance
+        input_dict["duration"] = duration
+        input_dict["campaign"] = campaign
 
-with col4:
-    fig4 = px.scatter(df, x="age", y="balance", color="deposit",
-                      title="Age vs Balance")
-    st.plotly_chart(fig4, use_container_width=True)
+        input_df = pd.DataFrame([input_dict])
 
-# =========================
-# PREDICTION
-# =========================
-st.subheader("🧠 Customer Prediction System")
+        prediction = model.predict(input_df)[0]
+        probability = model.predict_proba(input_df)[0][1]
 
-user_input = {}
+        if prediction == 1:
+            st.success("✅ HIGH CHANCE: Customer WILL Subscribe")
+        else:
+            st.error("❌ LOW CHANCE: Customer will NOT Subscribe")
 
-for col in X.columns:
-    if col in label_encoders:
-        user_input[col] = st.selectbox(col, label_encoders[col].classes_)
-    else:
-        user_input[col] = st.number_input(
-            col,
-            float(X[col].min()),
-            float(X[col].max()),
-            float(X[col].mean())
-        )
+        st.subheader("📊 Confidence Level")
+        st.progress(int(probability * 100))
+        st.write(f"Probability: {probability*100:.2f}%")
 
-if st.button("🚀 Predict Customer Behavior"):
-    input_df = pd.DataFrame([user_input])
-
-    for col in label_encoders:
-        if col in input_df:
-            input_df[col] = label_encoders[col].transform(input_df[col])
-
-    prediction = model.predict(input_df)[0]
-    prob = model.predict_proba(input_df)[0][1]
-
-    if prediction == 1:
-        st.success("✅ HIGH CHANCE: Customer WILL Subscribe")
-    else:
-        st.error("❌ LOW CHANCE: Customer will NOT Subscribe")
-
-    st.subheader("📊 Prediction Confidence")
-    st.progress(float(prob))
-    st.write(f"Probability: {prob*100:.2f}%")
-
-# =========================
-# FEATURE IMPORTANCE
-# =========================
+# -------------------------
+# Feature Importance
+# -------------------------
 st.subheader("🤖 Model Insights")
 
 importance = model.feature_importances_
 
-imp_df = pd.DataFrame({
+importance_df = pd.DataFrame({
     "Feature": X.columns,
     "Importance": importance
-}).sort_values("Importance")
+}).sort_values("Importance", ascending=False)
 
-fig5 = px.bar(imp_df, x="Importance", y="Feature",
-              orientation="h", title="Feature Importance")
+fig = px.bar(
+    importance_df.head(10),
+    x="Importance",
+    y="Feature",
+    orientation="h",
+    title="Top 10 Important Features"
+)
 
-st.plotly_chart(fig5, use_container_width=True)
+st.plotly_chart(fig, use_container_width=True)
 
+# -------------------------
 # Footer
+# -------------------------
 st.markdown("---")
-st.caption("🚀 Developed by Ghania Iftikhar | AI ML Dashboard")
+st.caption("Developed by Ghania Iftikhar | Machine Learning IDS Project")
