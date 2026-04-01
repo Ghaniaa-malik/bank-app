@@ -5,47 +5,40 @@ import plotly.express as px
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 
-st.set_page_config(page_title="AI Bank Dashboard", layout="wide")
+st.set_page_config(page_title="AI Bank Intelligence", layout="wide")
 
-st.title("💳 AI-Powered Bank Marketing Intelligence System")
+st.title("💳 AI-Powered Bank Intelligence SaaS")
 
 # =====================================================
-# 1️⃣ UPLOAD FILE FIRST
+# 1️⃣ UPLOAD DATA
 # =====================================================
-uploaded_file = st.file_uploader("📂 Upload CSV File", type=["csv"])
+uploaded_file = st.file_uploader("📂 Upload Your CSV File", type=["csv"])
 
 if uploaded_file is None:
-    st.info("Please upload a dataset to continue")
+    st.info("Upload a dataset to generate AI insights")
     st.stop()
 
 df = pd.read_csv(uploaded_file)
-
-st.success("File uploaded successfully ✅")
-
-st.subheader("📊 Dataset Preview")
-st.dataframe(df.head())
+st.success("Dataset Loaded Successfully ✅")
 
 # =====================================================
-# CHECK TARGET COLUMN
-# =====================================================
-if "deposit" not in df.columns:
-    st.error("❌ Dataset must contain 'deposit' column")
-    st.stop()
-
-# =====================================================
-# CLEAN + ENCODE
+# BASIC CLEAN
 # =====================================================
 df_encoded = df.copy()
 
 for col in df_encoded.select_dtypes(include='object').columns:
     df_encoded[col] = df_encoded[col].astype('category').cat.codes
 
+if "deposit" not in df.columns:
+    st.error("❌ 'deposit' column missing in dataset")
+    st.stop()
+
+# =====================================================
+# MODEL TRAINING
+# =====================================================
 X = df_encoded.drop("deposit", axis=1)
 y = df_encoded["deposit"]
 
-# =====================================================
-# TRAIN MODEL
-# =====================================================
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42
 )
@@ -56,133 +49,137 @@ model.fit(X_train, y_train)
 accuracy = model.score(X_test, y_test)
 
 # =====================================================
-# SIDEBAR
+# AI INSIGHTS ENGINE 🤖
 # =====================================================
-st.sidebar.title("Navigation")
+st.header("🧠 AI Auto Insights Report")
 
-page = st.sidebar.radio(
-    "Go to",
-    ["Dashboard", "Data Analysis", "Prediction", "Model Insights"]
-)
+col1, col2, col3, col4 = st.columns(4)
+
+col1.metric("Total Customers", len(df))
+col2.metric("Avg Age", round(df["age"].mean(), 1) if "age" in df.columns else "N/A")
+col3.metric("Avg Balance", round(df["balance"].mean(), 1) if "balance" in df.columns else "N/A")
+col4.metric("Model Accuracy", f"{accuracy:.2f}")
+
+st.markdown("### 🔍 Key Insights")
+
+insights = []
+
+if "age" in df.columns:
+    if df["age"].mean() > 40:
+        insights.append("Most customers are middle-aged → stable financial users")
+
+if "balance" in df.columns:
+    if df["balance"].mean() > 2000:
+        insights.append("High average balance → strong deposit potential")
+
+if "campaign" in df.columns:
+    insights.append("Campaign activity impacts customer conversion")
+
+if len(insights) == 0:
+    insights.append("Dataset is balanced but needs deeper marketing analysis")
+
+for i in insights:
+    st.info("👉 " + i)
 
 # =====================================================
 # DASHBOARD
 # =====================================================
-if page == "Dashboard":
+st.header("📊 Smart Dashboard")
 
-    st.header("📊 Dashboard Overview")
+c1, c2 = st.columns(2)
 
-    col1, col2, col3 = st.columns(3)
-
-    col1.metric("Rows", len(df))
-    col2.metric("Columns", len(df.columns))
-    col3.metric("Accuracy", f"{accuracy:.2f}")
-
+with c1:
     if "age" in df.columns:
-        st.subheader("Age Distribution")
-        st.plotly_chart(px.histogram(df, x="age"), use_container_width=True)
+        st.plotly_chart(px.histogram(df, x="age", title="Age Distribution"), use_container_width=True)
 
+with c2:
     if "balance" in df.columns:
-        st.subheader("Balance Distribution")
-        st.plotly_chart(px.histogram(df, x="balance"), use_container_width=True)
+        st.plotly_chart(px.histogram(df, x="balance", title="Balance Distribution"), use_container_width=True)
+
+if "deposit" in df.columns:
+    st.plotly_chart(px.pie(df, names="deposit", title="Deposit Ratio"), use_container_width=True)
 
 # =====================================================
-# DATA ANALYSIS
+# RELATIONSHIP ANALYSIS
 # =====================================================
-elif page == "Data Analysis":
+st.header("📈 Relationship Analysis")
 
-    st.header("📈 Data Analysis")
+numeric_cols = df.select_dtypes(include=np.number).columns
 
-    st.subheader("Correlation Heatmap")
-    st.plotly_chart(px.imshow(df_encoded.corr(), text_auto=True), use_container_width=True)
+if len(numeric_cols) >= 2:
+    x_axis = st.selectbox("X-Axis", numeric_cols)
+    y_axis = st.selectbox("Y-Axis", numeric_cols)
 
-    if "deposit" in df.columns:
-        st.subheader("Deposit Ratio")
-        st.plotly_chart(px.pie(df, names="deposit"), use_container_width=True)
-
-    numeric_cols = df.select_dtypes(include=np.number).columns
-
-    if len(numeric_cols) >= 2:
-        st.subheader("Scatter Plot")
-        x_axis = st.selectbox("X-axis", numeric_cols)
-        y_axis = st.selectbox("Y-axis", numeric_cols)
-
-        st.plotly_chart(px.scatter(df, x=x_axis, y=y_axis), use_container_width=True)
+    st.plotly_chart(px.scatter(df, x=x_axis, y=y_axis), use_container_width=True)
 
 # =====================================================
-# PREDICTION
+# PREDICTION SYSTEM
 # =====================================================
-elif page == "Prediction":
+st.header("🧠 Customer Prediction System")
 
-    st.header("🧠 Prediction System")
+input_data = {}
 
-    input_data = {}
+for col in X.columns:
 
-    for col in X.columns:
+    if pd.api.types.is_numeric_dtype(df[col]):
 
-        if pd.api.types.is_numeric_dtype(df[col]):
+        col_data = pd.to_numeric(df[col], errors='coerce')
 
-            col_data = pd.to_numeric(df[col], errors='coerce')
+        min_val = float(col_data.min())
+        max_val = float(col_data.max())
+        mean_val = float(col_data.mean())
 
-            min_val = float(col_data.min())
-            max_val = float(col_data.max())
-            mean_val = float(col_data.mean())
+        input_data[col] = st.number_input(
+            col,
+            min_value=min_val,
+            max_value=max_val,
+            value=mean_val
+        )
 
-            if np.isnan(mean_val):
-                mean_val = 0.0
+    else:
+        input_data[col] = st.selectbox(col, df[col].dropna().unique())
 
-            input_data[col] = st.number_input(
-                col,
-                min_value=min_val,
-                max_value=max_val,
-                value=mean_val
-            )
+if st.button("🚀 Predict"):
 
-        else:
-            input_data[col] = st.selectbox(col, df[col].dropna().unique())
+    input_df = pd.DataFrame([input_data])
 
-    if st.button("🚀 Predict"):
+    for col in input_df.select_dtypes(include='object').columns:
+        input_df[col] = input_df[col].astype('category').cat.codes
 
-        input_df = pd.DataFrame([input_data])
+    prediction = model.predict(input_df)[0]
+    prob = model.predict_proba(input_df)[0][1]
 
-        for col in input_df.select_dtypes(include='object').columns:
-            input_df[col] = input_df[col].astype('category').cat.codes
+    if prediction == 1:
+        st.success("✅ HIGH CHANCE: WILL SUBSCRIBE")
+    else:
+        st.error("❌ LOW CHANCE: WILL NOT SUBSCRIBE")
 
-        prediction = model.predict(input_df)[0]
-        prob = model.predict_proba(input_df)[0][1]
-
-        if prediction == 1:
-            st.success("✅ WILL SUBSCRIBE")
-        else:
-            st.error("❌ WILL NOT SUBSCRIBE")
-
-        st.progress(int(prob * 100))
-        st.write(f"Confidence: {prob*100:.2f}%")
+    st.progress(int(prob * 100))
+    st.write(f"Confidence: {prob*100:.2f}%")
 
 # =====================================================
-# MODEL INSIGHTS
+# FEATURE IMPORTANCE
 # =====================================================
-elif page == "Model Insights":
+st.header("🤖 AI Feature Importance")
 
-    st.header("🤖 Model Insights")
+importance = model.feature_importances_
 
-    importance = model.feature_importances_
+importance_df = pd.DataFrame({
+    "Feature": X.columns,
+    "Importance": importance
+}).sort_values("Importance", ascending=False)
 
-    importance_df = pd.DataFrame({
-        "Feature": X.columns,
-        "Importance": importance
-    }).sort_values("Importance", ascending=False)
-
-    st.plotly_chart(
-        px.bar(importance_df.head(10),
-               x="Importance",
-               y="Feature",
-               orientation="h"),
-        use_container_width=True
-    )
+st.plotly_chart(
+    px.bar(importance_df.head(10),
+           x="Importance",
+           y="Feature",
+           orientation="h",
+           title="Top Driving Factors"),
+    use_container_width=True
+)
 
 # =====================================================
 # FOOTER
 # =====================================================
 st.markdown("---")
-st.caption("AI Bank Dashboard | Final Stable Version")
+st.caption("🚀 AI SaaS Bank Intelligence System | Final Pro Version")
