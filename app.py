@@ -55,6 +55,12 @@ if uploaded_file:
                 st.info("Model saved as model.pkl")
 
         # ---------------- Prediction ----------------
+        import os
+
+if not os.path.exists("model.pkl"):
+    st.warning("Model file not found! Please train the model first.")
+else:
+    model = joblib.load("model.pkl")
         st.write("### Customer Prediction System")
         if os.path.exists("model.pkl"):
             model = joblib.load("model.pkl")
