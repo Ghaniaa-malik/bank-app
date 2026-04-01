@@ -1,113 +1,201 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier
-import matplotlib.pyplot as plt
+import plotly.express as px
+import joblib
 
-# Page setup
-st.set_page_config(page_title="AI Bank Marketing Dashboard", layout="wide")
+# -------------------------------
+# Page configuration
+# -------------------------------
+st.set_page_config(
+    page_title="Bank Marketing Intelligence System",
+    page_icon="💳",
+    layout="wide"
+)
 
-st.title("💳 AI-Powered Bank Marketing Intelligence System")
-st.markdown("Predict customer subscription using Machine Learning")
-
-# Load data
+# -------------------------------
+# Load dataset
+# -------------------------------
 df = pd.read_csv("bank.csv")
 
-# Encode categorical columns
-for col in df.select_dtypes(include=['object']).columns:
-    df[col] = pd.factorize(df[col])[0]
+# Load trained ML model
+model = joblib.load("model.pkl")
 
-# Features and target
-X = df.drop('deposit', axis=1)
-y = df['deposit']
+# -------------------------------
+# Sidebar Navigation
+# -------------------------------
+st.sidebar.title("Navigation")
 
-# Normalize
-X = (X - X.min()) / (X.max() - X.min())
+page = st.sidebar.radio(
+    "Go to",
+    [
+        "Dashboard",
+        "Data Analysis",
+        "Customer Prediction",
+        "Model Insights",
+        "Bulk Prediction"
+    ]
+)
 
-# Train model
-model = RandomForestClassifier(n_estimators=100, random_state=42)
-model.fit(X, y)
+# -------------------------------
+# Header
+# -------------------------------
+st.title("💳 AI-Powered Bank Marketing Intelligence System")
 
-# -------------------
-# Dashboard section
-# -------------------
+st.markdown("""
+Predict customer subscription to bank term deposits using machine learning.
+This system analyzes client attributes such as age, balance, campaign contacts,
+and call duration to determine subscription likelihood.
+""")
 
-st.subheader("📊 Dataset Overview")
+# =====================================================
+# DASHBOARD
+# =====================================================
 
-col1, col2 = st.columns(2)
+if page == "Dashboard":
 
-with col1:
-    st.metric("Total Customers", len(df))
+    st.header("📊 Dashboard Overview")
 
-with col2:
-    st.metric("Total Features", len(df.columns))
+    col1, col2, col3 = st.columns(3)
 
-st.dataframe(df.head())
+    col1.metric("Total Customers", len(df))
+    col2.metric("Average Age", int(df["age"].mean()))
+    col3.metric("Average Balance", int(df["balance"].mean()))
 
-# -------------------
-# Charts
-# -------------------
+    st.subheader("Age Distribution")
 
-st.subheader("📈 Data Visualizations")
+    fig = px.histogram(df, x="age")
+    st.plotly_chart(fig, use_container_width=True)
 
-chart1, chart2 = st.columns(2)
+    st.subheader("Balance Distribution")
 
-with chart1:
-    fig = plt.figure()
-    plt.hist(df['age'], bins=20)
-    plt.title("Customer Age Distribution")
-    plt.xlabel("Age")
-    plt.ylabel("Count")
-    st.pyplot(fig)
+    fig = px.histogram(df, x="balance")
+    st.plotly_chart(fig, use_container_width=True)
 
-with chart2:
-    fig = plt.figure()
-    df['deposit'].value_counts().plot(kind='bar')
-    plt.title("Deposit Subscription Count")
-    st.pyplot(fig)
+# =====================================================
+# DATA ANALYSIS
+# =====================================================
 
-# -------------------
-# Prediction section
-# -------------------
+elif page == "Data Analysis":
 
-st.subheader("🧠 Customer Prediction System")
+    st.header("📈 Data Analysis")
 
-col1, col2 = st.columns(2)
+    st.subheader("Dataset Preview")
+    st.dataframe(df.head())
 
-with col1:
+    st.subheader("Correlation Heatmap")
+
+    corr = df.corr(numeric_only=True)
+
+    fig = px.imshow(corr, text_auto=True)
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.subheader("Age vs Balance")
+
+    fig = px.scatter(df, x="age", y="balance")
+    st.plotly_chart(fig, use_container_width=True)
+
+# =====================================================
+# CUSTOMER PREDICTION
+# =====================================================
+
+elif page == "Customer Prediction":
+
+    st.header("🧠 Customer Prediction System")
 
     age = st.slider("Age", 18, 95, 30)
-    balance = st.number_input("Account Balance", -2000, 100000, 1000)
-    duration = st.number_input("Call Duration", 0, 5000, 300)
-    campaign = st.number_input("Campaign Contacts", 1, 50, 1)
+    balance = st.number_input("Account Balance", value=1000)
+    duration = st.number_input("Call Duration", value=300)
+    campaign = st.number_input("Campaign Contacts", value=1)
 
-with col2:
+    if st.button("Predict Subscription"):
 
-    if st.button("🚀 Predict Customer Behavior"):
-
-        input_data = pd.DataFrame({
-            "age":[age],
-            "balance":[balance],
-            "duration":[duration],
-            "campaign":[campaign]
-        })
-
-        for col in X.columns:
-            if col not in input_data.columns:
-                input_data[col] = 0
-
-        input_data = input_data[X.columns]
+        input_data = np.array([[age, balance, duration, campaign]])
 
         prediction = model.predict(input_data)[0]
+
         probability = model.predict_proba(input_data)[0][1]
 
         if prediction == 1:
-            st.success("✅ HIGH CHANCE: Customer WILL Subscribe")
+            st.success("Customer likely to SUBSCRIBE")
         else:
-            st.error("❌ LOW CHANCE: Customer will NOT Subscribe")
+            st.error("Customer unlikely to subscribe")
 
-        st.write("Prediction Confidence:")
-        st.progress(float(probability))
+        st.subheader("Subscription Probability")
+
+        st.progress(int(probability * 100))
+
+        st.write(f"Probability: {probability*100:.2f}%")
+
+# =====================================================
+# MODEL INSIGHTS
+# =====================================================
+
+elif page == "Model Insights":
+
+    st.header("🤖 Model Insights")
+
+    st.subheader("Feature Importance")
+
+    importance = model.feature_importances_
+
+    features = ["age", "balance", "duration", "campaign"]
+
+    importance_df = pd.DataFrame({
+        "Feature": features,
+        "Importance": importance
+    })
+
+    fig = px.bar(
+        importance_df.sort_values("Importance"),
+        x="Importance",
+        y="Feature",
+        orientation="h"
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("""
+Model Used: Random Forest Classifier
+
+This model analyzes customer attributes and predicts whether the client will subscribe to a bank deposit campaign.
+""")
+
+# =====================================================
+# BULK CSV PREDICTION
+# =====================================================
+
+elif page == "Bulk Prediction":
+
+    st.header("📂 Bulk Customer Prediction")
+
+    uploaded_file = st.file_uploader("Upload CSV File")
+
+    if uploaded_file:
+
+        new_data = pd.read_csv(uploaded_file)
+
+        predictions = model.predict(new_data)
+
+        new_data["Prediction"] = predictions
+
+        st.subheader("Prediction Results")
+
+        st.dataframe(new_data)
+
+        csv = new_data.to_csv(index=False)
+
+        st.download_button(
+            "Download Results",
+            csv,
+            "predictions.csv",
+            "text/csv"
+        )
+
+# -------------------------------
+# Footer
+# -------------------------------
 
 st.markdown("---")
+
 st.caption("Developed by Ghania Iftikhar | Machine Learning IDS Project")
