@@ -1,201 +1,90 @@
+# app.py
 import streamlit as st
 import pandas as pd
-import numpy as np
-import plotly.express as px
 import joblib
+from pathlib import Path
 
-# -------------------------------
-# Page configuration
-# -------------------------------
+# ----------------------------
+# Set Page Config
+# ----------------------------
 st.set_page_config(
-    page_title="Bank Marketing Intelligence System",
+    page_title="💳 AI-Powered Bank Marketing Intelligence",
     page_icon="💳",
     layout="wide"
 )
 
-# -------------------------------
-# Load dataset
-# -------------------------------
-df = pd.read_csv("bank.csv")
-
-# Load trained ML model
-model = joblib.load("model.pkl")
-
-# -------------------------------
-# Sidebar Navigation
-# -------------------------------
-st.sidebar.title("Navigation")
-
-page = st.sidebar.radio(
-    "Go to",
-    [
-        "Dashboard",
-        "Data Analysis",
-        "Customer Prediction",
-        "Model Insights",
-        "Bulk Prediction"
-    ]
-)
-
-# -------------------------------
-# Header
-# -------------------------------
+# ----------------------------
+# Title & Description
+# ----------------------------
 st.title("💳 AI-Powered Bank Marketing Intelligence System")
-
 st.markdown("""
-Predict customer subscription to bank term deposits using machine learning.
-This system analyzes client attributes such as age, balance, campaign contacts,
-and call duration to determine subscription likelihood.
+Predict customer subscription using **Machine Learning**.  
+Developed by **Ghania Iftikhar | Machine Learning IDS Project**.
 """)
 
-# =====================================================
-# DASHBOARD
-# =====================================================
+# ----------------------------
+# Load Model Safely
+# ----------------------------
+FILE_DIR = Path(__file__).parent
+model_path = FILE_DIR / "model.pkl"
 
-if page == "Dashboard":
+try:
+    model = joblib.load(model_path)
+except FileNotFoundError:
+    st.error("❌ model.pkl not found! Make sure the file is in the project folder.")
+    st.stop()
 
-    st.header("📊 Dashboard Overview")
-
-    col1, col2, col3 = st.columns(3)
-
-    col1.metric("Total Customers", len(df))
-    col2.metric("Average Age", int(df["age"].mean()))
-    col3.metric("Average Balance", int(df["balance"].mean()))
-
-    st.subheader("Age Distribution")
-
-    fig = px.histogram(df, x="age")
-    st.plotly_chart(fig, use_container_width=True)
-
-    st.subheader("Balance Distribution")
-
-    fig = px.histogram(df, x="balance")
-    st.plotly_chart(fig, use_container_width=True)
-
-# =====================================================
-# DATA ANALYSIS
-# =====================================================
-
-elif page == "Data Analysis":
-
-    st.header("📈 Data Analysis")
-
-    st.subheader("Dataset Preview")
+# ----------------------------
+# Dataset Upload (Optional)
+# ----------------------------
+st.sidebar.header("Upload Dataset (Optional)")
+uploaded_file = st.sidebar.file_uploader("Choose CSV file", type="csv")
+if uploaded_file:
+    df = pd.read_csv(uploaded_file)
+    st.write("### Dataset Preview")
     st.dataframe(df.head())
+else:
+    st.info("Upload a CSV to view data here.")
 
-    st.subheader("Correlation Heatmap")
+# ----------------------------
+# Customer Input for Prediction
+# ----------------------------
+st.sidebar.header("Customer Input Parameters")
 
-    corr = df.corr(numeric_only=True)
+def user_input_features():
+    age = st.sidebar.slider("Age", 18, 95, 30)
+    balance = st.sidebar.number_input("Account Balance", min_value=0, value=1000)
+    duration = st.sidebar.number_input("Last Call Duration (seconds)", min_value=0, value=300)
+    campaign = st.sidebar.number_input("Campaign Contacts", min_value=1, value=1)
+    
+    data = {
+        "age": age,
+        "balance": balance,
+        "duration": duration,
+        "campaign": campaign
+    }
+    features = pd.DataFrame([data])
+    return features
 
-    fig = px.imshow(corr, text_auto=True)
-    st.plotly_chart(fig, use_container_width=True)
+input_df = user_input_features()
 
-    st.subheader("Age vs Balance")
+st.write("### Customer Input Data")
+st.dataframe(input_df)
 
-    fig = px.scatter(df, x="age", y="balance")
-    st.plotly_chart(fig, use_container_width=True)
+# ----------------------------
+# Prediction
+# ----------------------------
+prediction = model.predict(input_df)
+prediction_proba = model.predict_proba(input_df)
 
-# =====================================================
-# CUSTOMER PREDICTION
-# =====================================================
+st.write("### Prediction")
+st.write("✅ Customer will subscribe" if prediction[0]==1 else "❌ Customer will NOT subscribe")
 
-elif page == "Customer Prediction":
+st.write("### Prediction Probability")
+st.write(f"Subscribe: {prediction_proba[0][1]*100:.2f}% | Not Subscribe: {prediction_proba[0][0]*100:.2f}%")
 
-    st.header("🧠 Customer Prediction System")
-
-    age = st.slider("Age", 18, 95, 30)
-    balance = st.number_input("Account Balance", value=1000)
-    duration = st.number_input("Call Duration", value=300)
-    campaign = st.number_input("Campaign Contacts", value=1)
-
-    if st.button("Predict Subscription"):
-
-        input_data = np.array([[age, balance, duration, campaign]])
-
-        prediction = model.predict(input_data)[0]
-
-        probability = model.predict_proba(input_data)[0][1]
-
-        if prediction == 1:
-            st.success("Customer likely to SUBSCRIBE")
-        else:
-            st.error("Customer unlikely to subscribe")
-
-        st.subheader("Subscription Probability")
-
-        st.progress(int(probability * 100))
-
-        st.write(f"Probability: {probability*100:.2f}%")
-
-# =====================================================
-# MODEL INSIGHTS
-# =====================================================
-
-elif page == "Model Insights":
-
-    st.header("🤖 Model Insights")
-
-    st.subheader("Feature Importance")
-
-    importance = model.feature_importances_
-
-    features = ["age", "balance", "duration", "campaign"]
-
-    importance_df = pd.DataFrame({
-        "Feature": features,
-        "Importance": importance
-    })
-
-    fig = px.bar(
-        importance_df.sort_values("Importance"),
-        x="Importance",
-        y="Feature",
-        orientation="h"
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
-
-    st.markdown("""
-Model Used: Random Forest Classifier
-
-This model analyzes customer attributes and predicts whether the client will subscribe to a bank deposit campaign.
-""")
-
-# =====================================================
-# BULK CSV PREDICTION
-# =====================================================
-
-elif page == "Bulk Prediction":
-
-    st.header("📂 Bulk Customer Prediction")
-
-    uploaded_file = st.file_uploader("Upload CSV File")
-
-    if uploaded_file:
-
-        new_data = pd.read_csv(uploaded_file)
-
-        predictions = model.predict(new_data)
-
-        new_data["Prediction"] = predictions
-
-        st.subheader("Prediction Results")
-
-        st.dataframe(new_data)
-
-        csv = new_data.to_csv(index=False)
-
-        st.download_button(
-            "Download Results",
-            csv,
-            "predictions.csv",
-            "text/csv"
-        )
-
-# -------------------------------
+# ----------------------------
 # Footer
-# -------------------------------
-
+# ----------------------------
 st.markdown("---")
-
-st.caption("Developed by Ghania Iftikhar | Machine Learning IDS Project")
+st.markdown("Developed by **Ghania Iftikhar | Machine Learning IDS Project**")
